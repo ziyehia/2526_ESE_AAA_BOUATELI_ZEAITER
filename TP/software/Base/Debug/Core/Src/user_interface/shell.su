@@ -1,8 +1,10 @@
 ../Core/Src/user_interface/shell.c:26:12:is_character_valid	16	static
-../Core/Src/user_interface/shell.c:31:12:is_string_valid	24	static
-../Core/Src/user_interface/shell.c:60:12:sh_help	48	static
-../Core/Src/user_interface/shell.c:75:12:sh_test_list	40	static
-../Core/Src/user_interface/shell.c:95:6:shell_init	24	static
-../Core/Src/user_interface/shell.c:120:5:shell_add	24	static
-../Core/Src/user_interface/shell.c:145:12:shell_exec	64	static
-../Core/Src/user_interface/shell.c:186:5:shell_run	24	static
+../Core/Src/user_interface/shell.c:31:12:is_string_valid	16	static
+../Core/Src/user_interface/shell.c:45:13:shell_transmit_buffer	24	static
+../Core/Src/user_interface/shell.c:64:12:sh_help	48	static
+../Core/Src/user_interface/shell.c:81:12:sh_test_list	40	static
+../Core/Src/user_interface/shell.c:101:6:shell_init	24	static
+../Core/Src/user_interface/shell.c:130:5:shell_add	24	static
+../Core/Src/user_interface/shell.c:155:12:shell_exec	64	static
+../Core/Src/user_interface/shell.c:200:6:shell_discard_line	16	static
+../Core/Src/user_interface/shell.c:208:5:shell_run	24	static

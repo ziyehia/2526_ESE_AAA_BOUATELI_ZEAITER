@@ -84,6 +84,9 @@ typedef struct h_shell_struct
     shell_func_t func_list[SHELL_FUNC_LIST_MAX_SIZE];     	/**< Array of registered shell functions. */
     char print_buffer[SHELL_PRINT_BUFFER_SIZE];           	/**< Buffer used for output. */
     char cmd_buffer[SHELL_CMD_BUFFER_SIZE];               	/**< Buffer used for input. */
+    uint16_t cmd_buffer_index;
+    uint8_t discard_line;                               /**< Reject invalid or incomplete input. */
+    uint8_t last_was_cr;                                /**< Consume CRLF as one terminator. */
     drv_shell_t drv;                        				/**< The shell driver instance. */
 } h_shell_t;
 
@@ -117,8 +120,11 @@ int shell_add(h_shell_t* h_shell, char* string_func_code, shell_func_pointer_t p
  * This function runs the shell, processing user commands.
  *
  * @param h_shell The pointer to the shell instance.
- * @return Never returns, it's an infinite loop.
+ * @return 0 on success/no input, or a negative error code. Consumes at most one byte.
  */
 int shell_run(h_shell_t* h_shell);
+
+/* Reject the pending line after a UART error or receive-buffer overflow. */
+void shell_discard_line(h_shell_t* h_shell);
 
 #endif /* SHELL_H_ */

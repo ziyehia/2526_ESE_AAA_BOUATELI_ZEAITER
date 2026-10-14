@@ -98,16 +98,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	init_device();
 
-	if (HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1) != HAL_OK)
-	{
-		Error_Handler();
-	}
-	if (HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1) != HAL_OK)
-	{
-		Error_Handler();
-	}
+	shell_add(&hshell1, "motor", set_motor_ccr, "Motor Speed Control");
 
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 2125); // 50% duty cycle (ARR = 8499)
   /* USER CODE END 2 */
 
   /* Infinite loop */

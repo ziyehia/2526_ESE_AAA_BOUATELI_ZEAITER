@@ -25,26 +25,30 @@ h_shell_t hshell1;
  */
 static int is_character_valid(char c)
 {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || (c == ' ') || (c == '=');
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || (c == ' ') || (c == '=') || (c == '_');
 }
 
-static int is_string_valid(char* str)
+static int is_string_valid(const char* str)
 {
-	int reading_head = 0;
-	while(str[reading_head] != '\0'){
-		//		char c = str[reading_head];
-		if(!is_character_valid(str[reading_head])){
-			if(reading_head == 0){
-				return 0;
-			}
-			else{
-				str[reading_head] = '\0';
-				return 1;
-			}
-		}
-		reading_head++;
-	}
-	return 1;
+    if (str == NULL || *str == '\0') {
+        return 0;
+    }
+    for (; *str != '\0'; str++) {
+        if (!is_character_valid(*str)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* snprintf returns the requested length, which may exceed the buffer. */
+static void shell_transmit_buffer(h_shell_t* h_shell, int size)
+{
+    if (size > 0) {
+        const uint16_t length = (size < SHELL_PRINT_BUFFER_SIZE)
+            ? (uint16_t)size : SHELL_PRINT_BUFFER_SIZE - 1U;
+        h_shell->drv.transmit(h_shell->print_buffer, length);
+    }
 }
 
 /**
@@ -60,14 +64,16 @@ static int is_string_valid(char* str)
 static int sh_help(h_shell_t* h_shell, int argc, char** argv)
 {
 	int i, size;
+    (void)argc;
+    (void)argv;
 	size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, "Code \t | Description \r\n");
-	h_shell->drv.transmit(h_shell->print_buffer, size);
+	shell_transmit_buffer(h_shell, size);
 	size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, "----------------------\r\n");
-	h_shell->drv.transmit(h_shell->print_buffer, size);
+	shell_transmit_buffer(h_shell, size);
 
 	for (i = 0; i < h_shell->func_list_size; i++){
 		size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, "%s \t | %s\r\n", h_shell->func_list[i].string_func_code, h_shell->func_list[i].description);
-		h_shell->drv.transmit(h_shell->print_buffer, size);
+		shell_transmit_buffer(h_shell, size);
 	}
 	return 0;
 }
@@ -77,7 +83,7 @@ static int sh_test_list(h_shell_t* h_shell, int argc, char** argv)
 	int size;
 	for(int arg=0; arg<argc; arg++){
 		size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, "Arg %d \t %s\r\n", arg, argv[arg]);
-		h_shell->drv.transmit(h_shell->print_buffer, size);
+		shell_transmit_buffer(h_shell, size);
 	}
 	return 0;
 }
@@ -97,10 +103,14 @@ void shell_init(h_shell_t* h_shell)
 	int size = 0;
 
 	h_shell->func_list_size = 0;
+    h_shell->cmd_buffer_index = 0;
+    h_shell->discard_line = 0;
+    h_shell->last_was_cr = 0;
+    h_shell->cmd_buffer[0] = '\0';
 
 	size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, "\r\n=> Monsieur Shell v0.2.2 without FreeRTOS <=\r\n");
-	h_shell->drv.transmit(h_shell->print_buffer, size);
-	h_shell->drv.transmit(PROMPT, sizeof(PROMPT));
+	shell_transmit_buffer(h_shell, size);
+	h_shell->drv.transmit(PROMPT, sizeof(PROMPT) - 1U);
 
 	shell_add(h_shell, "help", sh_help, "Help");
 	shell_add(h_shell, "test", sh_test_list, "Test list");
@@ -144,21 +154,32 @@ int shell_add(h_shell_t* h_shell, char* string_func_code, shell_func_pointer_t p
  */
 static int shell_exec(h_shell_t* h_shell, char* buf)
 {
-	int i, argc;
-	char* argv[SHELL_ARGC_MAX];
-	char* p;
-
-	// Create argc, argv**
-	argc = 1;
-	argv[0] = buf;
-	for (p = buf; *p != '\0' && argc < SHELL_ARGC_MAX; p++)
-	{
-		if (*p == ' ')
-		{
-			*p = '\0';
-			argv[argc++] = p + 1;
-		}
-	}
+    int i;
+    int argc = 0;
+    char* argv[SHELL_ARGC_MAX];
+    char* p = buf;
+    while (*p != '\0') {
+        while (*p == ' ') {
+            p++;
+        }
+        if (*p == '\0') {
+            break;
+        }
+        if (argc == SHELL_ARGC_MAX) {
+            h_shell->drv.transmit("Too many arguments\r\n", 20);
+            return -1;
+        }
+        argv[argc++] = p;
+        while (*p != '\0' && *p != ' ') {
+            p++;
+        }
+        if (*p != '\0') {
+            *p++ = '\0';
+        }
+    }
+    if (argc == 0) {
+        return 0;
+    }
 
 	for (i = 0; i < h_shell->func_list_size; i++)
 	{
@@ -171,59 +192,64 @@ static int shell_exec(h_shell_t* h_shell, char* buf)
 
 	int size;
 	size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, "%s : no such command\r\n", argv[0]);
-	h_shell->drv.transmit(h_shell->print_buffer, size);
+	shell_transmit_buffer(h_shell, size);
 	return -1;
 }
 
-/**
- * @brief Runs the shell.
- *
- * This function runs the shell, processing user commands.
- *
- * @param h_shell The pointer to the shell instance.
- * @return Never returns, it's an infinite loop.
- */
+/* Discard until the next complete line, even if later bytes look valid. */
+void shell_discard_line(h_shell_t* h_shell)
+{
+    h_shell->cmd_buffer_index = 0;
+    h_shell->discard_line = 1;
+    h_shell->last_was_cr = 0;
+}
+
+/* Consume at most one queued byte; never wait for a complete command. */
 int shell_run(h_shell_t* h_shell)
 {
-	static int cmd_buffer_index;
-	char c;
-	int size;
+    char c;
+    if (h_shell->drv.receive(&c, 1) != 1U) {
+        return 0;
+    }
+    if (c == '\n' && h_shell->last_was_cr != 0U) {
+        h_shell->last_was_cr = 0;
+        return 0;
+    }
+    h_shell->last_was_cr = (c == '\r');
 
-	h_shell->drv.receive(&c, 1);
-
-	switch(c)
-	{
-	case '\r': // Process RETURN key
-		//case '\n':
-		size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, "\r\n");
-		h_shell->drv.transmit(h_shell->print_buffer, size);
-		h_shell->cmd_buffer[cmd_buffer_index++] = 0; // Add '\0' char at the end of the string
-		//		size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, ":%s\r\n", h_shell->cmd_buffer);
-		//		h_shell->drv.transmit(h_shell->print_buffer, size);
-		cmd_buffer_index = 0; // Reset buffer
-		shell_exec(h_shell, h_shell->cmd_buffer);
-		h_shell->drv.transmit(PROMPT, sizeof(PROMPT));
-		break;
-
-	case '\b': // Backspace
-		if (cmd_buffer_index > 0) // Is there a character to delete?
-		{
-			h_shell->cmd_buffer[cmd_buffer_index] = '\0'; // Removes character from the buffer, '\0' character is required for shell_exec to work
-			cmd_buffer_index--;
-			h_shell->drv.transmit("\b \b", 3); // "Deletes" the character on the terminal
-		}
-		break;
-
-	default: // Other characters
-		// Only store characters if the buffer has space
-		if (cmd_buffer_index < SHELL_CMD_BUFFER_SIZE)
-		{
-			if (is_character_valid(c))
-			{
-				h_shell->drv.transmit(&c, 1); // echo
-				h_shell->cmd_buffer[cmd_buffer_index++] = c; // Store
-			}
-		}
-	}
-	return 0;
+    if (c == '\r' || c == '\n') {
+        int result = 0;
+        h_shell->drv.transmit("\r\n", 2);
+        if (h_shell->discard_line != 0U) {
+            h_shell->drv.transmit("Invalid or too long command\r\n",
+                sizeof("Invalid or too long command\r\n") - 1U);
+            result = -1;
+        } else {
+            h_shell->cmd_buffer[h_shell->cmd_buffer_index] = '\0';
+            result = shell_exec(h_shell, h_shell->cmd_buffer);
+        }
+        h_shell->cmd_buffer_index = 0;
+        h_shell->discard_line = 0;
+        h_shell->cmd_buffer[0] = '\0';
+        h_shell->drv.transmit(PROMPT, sizeof(PROMPT) - 1U);
+        return result;
+    }
+    if (h_shell->discard_line != 0U) {
+        return 0;
+    }
+    if (c == '\b' || c == 127) {
+        if (h_shell->cmd_buffer_index > 0U) {
+            h_shell->cmd_buffer[--h_shell->cmd_buffer_index] = '\0';
+            h_shell->drv.transmit("\b \b", 3);
+        }
+        return 0;
+    }
+    if (!is_character_valid(c)
+        || h_shell->cmd_buffer_index >= SHELL_CMD_BUFFER_SIZE - 1U) {
+        shell_discard_line(h_shell);
+        return -1;
+    }
+    h_shell->cmd_buffer[h_shell->cmd_buffer_index++] = c;
+    h_shell->drv.transmit(&c, 1);
+    return 0;
 }
