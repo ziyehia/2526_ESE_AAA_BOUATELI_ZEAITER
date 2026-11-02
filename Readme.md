@@ -31,7 +31,8 @@ CCR1=2550 CCR2=1700 MAX=4250
 ```
 Avec `CCR1=2125`, qui correspond à un rapport cyclique de 50%n,nous obtenons :
 
-<img width="2880" height="2160" alt="image" src="https://github.com/user-attachments/assets/8c138497-4c55-43cb-b26e-1953992048d3" />
+<img width="2880" height="2160" alt="image" src="https://github.com/user-attachments/assets/099a9956-e954-431d-bae2-e8ef631b20af" />
+
 
 ### Caractères acceptés et correction de la saisie
 
