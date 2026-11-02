@@ -72,3 +72,28 @@ Avec cette loi de commande, **X = 0 n'est pas une commande d'arrêt** : les
 rapports cycliques des bras valent idéalement 0 % et 100 %. Pour X = 2125,
 les deux bras ont le même rapport cyclique et la tension moyenne idéale
 entre U et V est nulle ; cela ne garantit pas l'arrêt mécanique du moteur.
+
+
+## 6.3 Premiers tests
+
+Brancher le moteur en respectant les données constructeur du moteur.
+
+Faites vérifier l'ensemble des signaux par votre professeur.
+
+Faire un premier test dans les conditions suivantes (dans l'ordre) :
+
+Rapport cyclique de 50%
+Rapport cyclique de 70%
+Quels problèmes observez vous ?
+
+Pour palier à ce problème, générer une montée progressive du rapport cyclique jusqu'à arriver à la vitesse cible commandé par la commande définie précédemment.
+
+
+On a branché le moteur en respectant les données constructeur du moteur
+
+On a fait un premier test dans les conditions suivantes:
+Rapport cyclique de 50%
+Rapport cyclique de 70%
+
+N'ayant pas eu le temps nous n'avons pas vu de problèmes. Comme attendu , à 50% le moteur ne tourne pas. à alpha entre 0 et 50% on passe de -E à 0V et entre 50 et 100% on passe de 0V à E.
+
