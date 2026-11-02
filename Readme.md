@@ -1,4 +1,11 @@
-# Init
+## Calcul du DTG
+
+
+Les données nécessaires ont été relevées sur le schéma KiCad de la carte (références des transistors et du driver, résistance de grille RG = 30 Ω) et dans les datasheets correspondantes. TIM1 est cadencé à f_TIM = 24 MHz / 6 × 85 / 2 = 170 MHz. En mode center-aligned, une période PWM dure 2 × ARR cycles, d’où ARR = 170·10⁶ / (2 × 20·10³) = 4250, soit une résolution de log₂(4250) ≈ 12 bits (≥ 10 bits demandés). Pour un rapport cyclique de 60 %, CCR1 = 0,6 × 4250 = 2550 et CCR2 = 4250 − 2550 = 1700.
+
+Le temps mort doit couvrir le blocage d’un transistor avant la conduction de l’autre, soit td(off) + tf − td(on) = 39 + 35 − 11 = 63 ns d’après la datasheet (mesures à RG = 5,1 Ω), plus l’écart de propagation maximal du driver HCPL-315J, PDD max = 350 ns. Comme la carte utilise RG = 30 Ω, environ 5,9 fois la valeur de test, on a mis les temps de commutation à l’échelle : td(off) + tf ≈ 436 ns et td(on) ≈ 65 ns, ce qui donne 371 + 350 ≈ 720 ns. On retient 1 µs pour garder une marge face aux dispersions, à la température et à l’approximation linéaire en RG.
+
+Avec t_DTS = 1 / 170 MHz ≈ 5,88 ns, la première plage de DTG (DTG[6:0] × t_DTS) plafonne à 747 ns. On utilise donc la deuxième, t = (64 + DTG[5:0]) × 2 × t_DTS, de pas 11,76 ns : 1000 / 11,76 = 85, donc DTG[5:0] = 85 − 64 = 21. Avec les bits de plage DTG[7:6] = 10, on obtient DTG = 0x80 + 21 = 0x95 = 149, et l’on vérifie que 85 × 11,76 ns = 1 µs.
 
 ## Commande du rapport cyclique par UART
 
@@ -23,6 +30,9 @@ confirme les valeurs par le message :
 ```text
 CCR1=2550 CCR2=1700 MAX=4250
 ```
+Nous obtenons :
+
+<img width="2880" height="2160" alt="image" src="https://github.com/user-attachments/assets/8c138497-4c55-43cb-b26e-1953992048d3" />
 
 ### Caractères acceptés et correction de la saisie
 
