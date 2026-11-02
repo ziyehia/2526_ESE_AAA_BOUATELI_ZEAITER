@@ -58,43 +58,51 @@ int motor_init(void){
 	return 0;
 }
 
+static int motor_ccr_error(h_shell_t* h_shell, const char* reason)
+{
+	const int size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE,
+		"Error: %s. CCR range: 0-%lu.\r\n", reason,
+		(unsigned long)__HAL_TIM_GET_AUTORELOAD(&htim1));
+	if (size > 0) {
+		const uint16_t length = (size < SHELL_PRINT_BUFFER_SIZE)
+			? (uint16_t)size : SHELL_PRINT_BUFFER_SIZE - 1U;
+		h_shell->drv.transmit(h_shell->print_buffer, length);
+	}
+	return HAL_ERROR;
+}
+
 int set_motor_ccr(h_shell_t* h_shell, int argc, char** argv){
-	int size;
 	if (h_shell == NULL) {
 		return HAL_ERROR;
 	}
 
 	if(argc != 2 || argv == NULL || argv[1] == NULL){
-		size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, "Need 1 argument : CCR Value\r\n");
-		h_shell->drv.transmit(h_shell->print_buffer, size);
-		return HAL_ERROR;
+		return motor_ccr_error(h_shell, "enter one digits-only value");
 	}
 
 	if(argv[1][0] == '\0'){
-		size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, "CCR Value must not be empty\r\n");
-		h_shell->drv.transmit(h_shell->print_buffer, size);
-		return HAL_ERROR;
+		return motor_ccr_error(h_shell, "enter digits only");
 	}
 
 	for(const char* digit = argv[1]; *digit != '\0'; digit++){
 		if(*digit < '0' || *digit > '9'){
-			size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE, "CCR Value must contain only digits\r\n");
-			h_shell->drv.transmit(h_shell->print_buffer, size);
-			return HAL_ERROR;
+			return motor_ccr_error(h_shell, "enter digits only");
 		}
 	}
 
-	// Validate first, then convert in decimal. ERANGE also saturates to ARR.
+	// Reject invalid and out-of-range input before touching either PWM channel.
 	errno = 0;
 	char* end;
 	const unsigned long requested = strtoul(argv[1], &end, 10);
-	if (*end != '\0' || (errno != 0 && errno != ERANGE)) {
-		return HAL_ERROR;
-	}
 	const uint32_t maximum = __HAL_TIM_GET_AUTORELOAD(&htim1);
-	const uint32_t value = (errno == ERANGE || requested > maximum) ? maximum : (uint32_t)requested;
-	const uint32_t applied = motor_set_ccr(value);
-	size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE,
+	if (errno == ERANGE || requested > maximum) {
+		return motor_ccr_error(h_shell, "value out of range");
+	}
+	if (errno != 0 || *end != '\0') {
+		return motor_ccr_error(h_shell, "enter digits only");
+	}
+	const uint32_t applied = motor_set_ccr((uint32_t)requested);
+	const int size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE,
 		"CCR1=%lu CCR2=%lu MAX=%lu\r\n",
 		(unsigned long)applied, (unsigned long)(maximum - applied),
 		(unsigned long)maximum);

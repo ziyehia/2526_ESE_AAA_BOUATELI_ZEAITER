@@ -1,3 +1,4 @@
 ../Core/Src/motor_control/motor.c:12:10:motor_set_ccr	3
 ../Core/Src/motor_control/motor.c:30:5:motor_init	6
-../Core/Src/motor_control/motor.c:61:5:set_motor_ccr	16
+../Core/Src/motor_control/motor.c:61:12:motor_ccr_error	3
+../Core/Src/motor_control/motor.c:74:5:set_motor_ccr	15

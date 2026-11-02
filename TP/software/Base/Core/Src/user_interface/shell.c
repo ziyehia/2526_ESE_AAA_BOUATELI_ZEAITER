@@ -244,6 +244,7 @@ int shell_run(h_shell_t* h_shell)
         }
         return 0;
     }
+    /* Keep the original shell character set and reject invalid lines. */
     if (!is_character_valid(c)
         || h_shell->cmd_buffer_index >= SHELL_CMD_BUFFER_SIZE - 1U) {
         shell_discard_line(h_shell);
