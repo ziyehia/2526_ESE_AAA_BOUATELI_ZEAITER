@@ -29,7 +29,7 @@ confirme les valeurs par le message :
 ```text
 CCR1=2550 CCR2=1700 MAX=4250
 ```
-Nous obtenons :
+Avec CCR1=2125, qui correspond à un rapport cyclique de 50%n,nous obtenons :
 
 <img width="2880" height="2160" alt="image" src="https://github.com/user-attachments/assets/8c138497-4c55-43cb-b26e-1953992048d3" />
 
