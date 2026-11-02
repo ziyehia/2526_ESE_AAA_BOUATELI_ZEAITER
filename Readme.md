@@ -166,86 +166,71 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 ```
 
 
-## 7.3. Mesure de vitesse
+## 7.3 Mesure de vitesse
 
-### Capteur de vitesse et fonction de transfert
+### Broches du STM32 utilisées
 
-La vitesse est mesurée par le codeur incrémental monté sur l'arbre (signaux `ENC_A`, `ENC_B`, `ENC_Z` sur le schéma KiCad). Les voies A et B sont deux signaux carrés en quadrature, de `PPR` impulsions par tour. Le timer en mode codeur compte les fronts des deux voies (×4), soit `4 × PPR` incréments par tour. Le sens de comptage donne le sens de rotation. La voie Z produit une impulsion par tour ; elle n'est pas utile pour mesurer la vitesse.
+Le codeur incrémental du moteur sort en différentiel (A, /A, B, /B, Z, /Z) sur le DE9 J1301. Le récepteur de ligne MAX3097E (U1301, feuille `encoderMotor`) remet ces signaux en logique 3,3 V. On a suivi les nets dans le schéma KiCad jusqu'aux connecteurs de la Nucleo, puis retrouvé les broches dans l'UM2505 :
 
-En lisant le compteur toutes les Te secondes :
+| Signal | Net KiCad | Connecteur Nucleo | Broche STM32 | Fonction |
+| --- | --- | --- | --- | --- |
+| Voie A | `/ENC_A` | CN10-13 | **PA6** | `TIM3_CH1` (mode codeur) |
+| Voie B | `/ENC_B` | CN7-32 | **PA4** | `TIM3_CH2` (mode codeur) |
+| Index Z | `/ENC_Z` | CN10-2 | **PC8** | `TIM3_CH3` (capture) |
 
-n [tr/min] = ΔCNT × 60 / (4 × PPR × Te)
+Dans le projet de base, TIM3 était en mode « Hall sensor » (XOR des 3 voies). Ce mode sert aux moteurs brushless, pas à un codeur en quadrature. On l'a passé en **mode Encoder TI12** : le compteur 16 bits compte chaque front de A et de B, soit **4 incréments par point du codeur**, et son sens donne le sens de rotation. L'index Z est capturé sur CH3 : à chaque tour, la valeur du compteur est recopiée dans CCR3.
 
-La fonction de transfert est un gain pur, échantillonné. La résolution vaut un incrément par période : Δn = 60 / (4 × PPR × Te). Par exemple, avec PPR = 1024 et Te = 1 ms, Δn ≈ 14,6 tr/min. Une fréquence de mesure élevée dégrade donc la résolution à basse vitesse.
+### Fonction de transfert du capteur de vitesse
 
-La sonde tachymétrique, utilisée seulement pour caractériser le moteur, délivre une tension proportionnelle à la vitesse : V_tach = K_tach × n, avec K_tach donné par la datasheet (en V/1000 tr/min).
+**Codeur** (utilisé pour l'asservissement). Avec `N` points par tour et `Δn` incréments comptés pendant la période `Te` :
+
+```
+Ω [tr/min] = 60 · Δn / (4 · N · Te)        ω [rad/s] = 2π · Δn / (4 · N · Te)
+```
+
+C'est un gain pur. La mesure donne la vitesse moyenne sur `Te`, ce qui revient à environ `Te/2` de retard. La résolution vaut `q = 60 / (4·N·Te)`, soit environ 1,46 tr/min avec N = 1024 et Te = 10 ms.
+
+N = …… points/tour *(datasheet du codeur, à vérifier avec `REV` = 4·N affiché par `GET_SPEED`)*
+
+**Dynamo tachymétrique** (seulement pour identifier le moteur) : `U_tachy = K_t · Ω`, avec K_t = …… V / 1000 tr/min *(datasheet)*.
 
 ### Constante de temps mécanique
 
-On applique un échelon de rapport cyclique, par exemple `SET_CCR 2550` puis `SET_CCR 3000`, et on relève V_tach à l'oscilloscope. Partir d'une vitesse non nulle évite que le frottement sec au démarrage déforme la réponse. La réponse est du premier ordre, et τm est le temps nécessaire pour atteindre 63 % de la variation finale de vitesse.
+On part de l'arrêt et on applique un échelon de tension (de `SET_CCR 2125` à `SET_CCR 2975`, soit de 50 % à 70 %). On relève la tension de la dynamo tachymétrique à l'oscilloscope en mode single. Comme la constante électrique est petite devant la constante mécanique, la vitesse suit un premier ordre :
 
-On mesure τm avec la machine synchrone accouplée, car son inertie s'ajoute à celle de la MCC et c'est dans cette configuration que l'asservissement fonctionnera.
+```
+Ω(p) / U(p) = K / (1 + τm · p)
+```
 
-**Résultat mesuré : τm = ___ ms**
+τm est le temps pour atteindre 63 % de la vitesse finale. Il faut faire l'essai avec une alimentation limitée en courant, car l'échelon provoque un appel de courant important.
 
-### Broches utilisées
+Mesures : Ω_final = …… tr/min, **τm = …… ms** *(capture oscilloscope à ajouter)*
 
-| Signal | Broche | Connecteur NUCLEO | Fonction |
-| --- | --- | --- | --- |
-| `ENC_A` | PA6 | CN10 pin 13 | TIM3_CH1 |
-| `ENC_B` | PA4 | CN7 pin 32 | TIM3_CH2 |
-| `ENC_Z` | PC8 | CN10 pin 2 | TIM3_CH3 (non utilisé) |
+### Fréquence de l'asservissement en vitesse
 
-TIM3 est un timer 16 bits. On calcule la différence entre deux lectures en `int16_t`, ce qui gère le débordement du compteur tant que |ΔCNT| < 32768 sur une période d'échantillonnage.
+On choisit **Te = 10 ms, soit 100 Hz** :
 
-### Fréquence de l'asservissement de vitesse
-
-La période d'échantillonnage doit être petite devant τm : on prend Te ≈ τm / 10 à τm / 20. Elle doit aussi rester assez longue pour compter suffisamment d'incréments à basse vitesse. Pour τm de quelques dizaines à quelques centaines de ms, on obtient **f_e entre 100 Hz et 1 kHz**. On retient f_e = ___ Hz.
-
-Pour que la mesure de vitesse reste synchrone de la PWM et de la mesure de courant, on la cadence par le callback ADC (20 kHz), en divisant la fréquence par 20 000 / f_e. Aucun timer supplémentaire n'est nécessaire.
+* il faut `Te ≤ τm / 10` pour bien suivre la dynamique mécanique. Si on mesure τm < 100 ms, il faudra passer à 5 ms ;
+* la boucle de vitesse doit rester bien plus lente que la PWM (20 kHz) et que la future boucle de courant ;
+* un Te plus court dégrade la résolution : à 1 kHz, q ≈ 14,6 tr/min, trop grossier à basse vitesse ;
+* le compteur 16 bits ne déborde pas entre deux mesures : à 3000 tr/min, Δn ≈ 2050, bien en dessous de 32767.
 
 ### Code
 
-CubeMX, TIM3 : *Combined Channels = Encoder Mode*, *Encoder Mode TI1 and TI2*, Period = 65535, Input Filter ≈ 8 pour filtrer les parasites des fronts.
-
-```c
-#define PPR      1024      // à remplacer par la valeur du codeur
-#define FE_SPEED 1000      // fréquence de mesure (Hz)
-
-volatile float speed_rpm;
-static uint16_t cnt_prev;
-static uint16_t div_cnt;
-
-HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
-
-static void speed_update(void)
-{
-    uint16_t cnt = __HAL_TIM_GET_COUNTER(&htim3);
-    int16_t d = (int16_t)(cnt - cnt_prev);
-    cnt_prev = cnt;
-    speed_rpm = d * 60.0f * FE_SPEED / (4.0f * PPR);
-}
-
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
-{
-    /* ... mesure de courant (7.2) ... */
-    if (++div_cnt >= 20000 / FE_SPEED) {
-        div_cnt = 0;
-        speed_update();
-    }
-}
-```
-
-Une commande shell `SPEED` affiche `speed_rpm`.
+* `.ioc` et `tim.c` : TIM3 passe en Encoder Mode TI12 (filtre d'entrée 4), avec CH3 en Input Capture pour l'index.
+* `acquisition/input_encoder.c` :
+  * `encoder_init()` démarre le compteur et la capture de l'index ;
+  * `encoder_update()` lit le compteur toutes les Te et calcule Δn par différence signée sur 16 bits (le débordement est donc géré), puis la vitesse ;
+  * `encoder_get_speed_rpm()` et `encoder_get_speed_rad_s()` fournissent la mesure pour le futur PID.
+* `app.c` : `app_tick_1ms()` est appelée par la base de temps HAL (TIM6, 1 ms) et lance `encoder_update()` toutes les 10 ms. La période est donc fixée par un timer matériel et ne dépend pas de la boucle principale.
+* Commande shell `GET_SPEED` : affiche `SPEED=… rpm DELTA=… REV=…`.
 
 ### Tests
 
-| Essai | Résultat attendu |
-| --- | --- |
-| `SET_CCR 2125` (tension moyenne nulle) | Vitesse ≈ 0, éventuellement ±1 incrément |
-| `SET_CCR 2550` puis `SET_CCR 1700` | Vitesses de signes opposés et de normes voisines |
-| Vitesse constante | Valeur stable, écart < 2 % avec la sonde tachymétrique (V_tach / K_tach) |
-| Arbre tourné d'un tour à la main | CNT varie de 4 × PPR |
+1. Moteur hors tension, on tourne l'arbre à la main et on tape `GET_SPEED` : le signe change avec le sens de rotation et `REV` vaut 4·N.
+2. Moteur alimenté (`SET_CCR 2550`, `2975`…) : on compare `GET_SPEED` avec la vitesse donnée par la dynamo (`U_tachy / K_t`).
+
+Résultats : *(à compléter)*
 
 **Vérification à l'oscilloscope** : voie 1 sur une sortie PWM (par exemple `U_PWM_H`), voie 2 sur le GPIO de debug. On doit observer une impulsion par période (20 kHz), toujours à la même position, peu après le milieu de l'impulsion haute. Le décalage correspond à la durée des deux conversions (≈ 2 × 60 cycles ADC ≈ 3 µs à 42,5 MHz) et à la latence de l'interruption. Une impulsion qui glisse par rapport à la PWM indique que le déclenchement n'est pas pris sur TIM1.
 
