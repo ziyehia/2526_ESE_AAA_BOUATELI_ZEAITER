@@ -6,6 +6,7 @@
  */
 
 #include "app.h"
+#include "acquisition/input_analog.h"
 #include "user_interface/shell.h"
 
 #define SHELL_RX_QUEUE_SIZE 128U
@@ -39,6 +40,46 @@ static void shell_uart2_start_tx(void)
     }
 }
 
+/* Shell command runs in main context, never in the UART callback. */
+static void current_print_channel(h_shell_t* h_shell, const char* label,
+                                  const input_analog_current_t* current)
+{
+    const int size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE,
+        "%s: ADC=%u V=%u mV I_est=%ld mA\r\n", label,
+        (unsigned int)current->raw, (unsigned int)current->voltage_mv,
+        (long)current->current_ma);
+    if (size > 0) {
+        const uint16_t length = (size < SHELL_PRINT_BUFFER_SIZE)
+            ? (uint16_t)size : SHELL_PRINT_BUFFER_SIZE - 1U;
+        h_shell->drv.transmit(h_shell->print_buffer, length);
+    }
+}
+
+static int current_command(h_shell_t* h_shell, int argc, char** argv)
+{
+    (void)argv;
+    if (argc != 1) {
+        h_shell->drv.transmit("Error: usage: current\r\n",
+                              sizeof("Error: usage: current\r\n") - 1U);
+        return HAL_ERROR;
+    }
+    input_analog_measurement_t measurement;
+    const HAL_StatusTypeDef status = input_analog_read(&measurement);
+    if (status != HAL_OK) {
+        if (status == HAL_TIMEOUT) {
+            h_shell->drv.transmit("Error: ADC1 measurement timed out.\r\n",
+                sizeof("Error: ADC1 measurement timed out.\r\n") - 1U);
+        } else {
+            h_shell->drv.transmit("Error: ADC1 measurement failed.\r\n",
+                sizeof("Error: ADC1 measurement failed.\r\n") - 1U);
+        }
+        return status;
+    }
+    current_print_channel(h_shell, "Bus", &measurement.bus);
+    current_print_channel(h_shell, "U", &measurement.motor);
+    return HAL_OK;
+}
+
 void init_device(void)
 {
     hshell1.drv.transmit = shell_uart2_transmit;
@@ -47,16 +88,31 @@ void init_device(void)
     if (shell_add(&hshell1, "SET_CCR", set_motor_ccr, "Set CCR, range 0..4250") != 0) {
         Error_Handler();
     }
+    if (shell_add(&hshell1, "start", motor_start_command, "Enable PWM at 50%") != 0) {
+        Error_Handler();
+    }
+    if (shell_add(&hshell1, "stop", motor_stop_command, "Disable PWM and cancel ramp") != 0) {
+        Error_Handler();
+    }
+    if (shell_add(&hshell1, "speed", motor_speed_command, "Ramp CCR to target in 3 s") != 0) {
+        Error_Handler();
+    }
+    if (shell_add(&hshell1, "current", current_command, "Read bus/U current (polling)") != 0) {
+        Error_Handler();
+    }
 
     led_init();
     if (motor_init() != HAL_OK) {
+        Error_Handler();
+    }
+    if (input_analog_init() != HAL_OK) {
         Error_Handler();
     }
     if (HAL_UART_Receive_IT(&huart2, &shell_uart2_received_char, 1) != HAL_OK) {
         Error_Handler();
     }
 
-    // Later lab steps: button, acquisition and closed-loop control initialization.
+    // Later lab steps: button, encoder and closed-loop control initialization.
 }
 
 uint8_t shell_uart2_transmit(const char *pData, uint16_t size)
@@ -149,4 +205,5 @@ void loop(void)
     for (unsigned int i = 0; i < SHELL_BYTES_PER_LOOP; i++) {
         shell_run(&hshell1);
     }
+    motor_process();
 }
