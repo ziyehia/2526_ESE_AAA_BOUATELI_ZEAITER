@@ -1,0 +1,3 @@
+../Core/Src/acquisition/input_encoder.c:29:19:input_encoder_init	8
+../Core/Src/acquisition/input_encoder.c:63:6:input_encoder_sample	6
+../Core/Src/acquisition/input_encoder.c:101:19:input_encoder_read	7

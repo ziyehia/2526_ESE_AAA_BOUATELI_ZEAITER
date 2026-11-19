@@ -48,8 +48,18 @@ static uint32_t motor_apply_ccr(uint32_t value)
     // Suppress preload transfers until both arm values are ready.
     const uint32_t update_disabled = htim1.Instance->CR1 & TIM_CR1_UDIS;
     SET_BIT(htim1.Instance->CR1, TIM_CR1_UDIS);
+    /* With power outputs disabled, load neutral immediately without an UG:
+     * resetting TIM1 would disturb the continuous ADC trigger cadence. */
+    if (motor.pwm_enabled == 0U) {
+        __HAL_TIM_DISABLE_OCxPRELOAD(&htim1, TIM_CHANNEL_1);
+        __HAL_TIM_DISABLE_OCxPRELOAD(&htim1, TIM_CHANNEL_2);
+    }
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, value);
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, maximum - value);
+    if (motor.pwm_enabled == 0U) {
+        __HAL_TIM_ENABLE_OCxPRELOAD(&htim1, TIM_CHANNEL_1);
+        __HAL_TIM_ENABLE_OCxPRELOAD(&htim1, TIM_CHANNEL_2);
+    }
     if (update_disabled == 0U) {
         CLEAR_BIT(htim1.Instance->CR1, TIM_CR1_UDIS);
     }
@@ -73,6 +83,7 @@ int motor_stop(void)
     motor.target_ccr = motor.current_ccr;
 
     // Gate all TIM1 outputs off before disabling individual channels.
+    // Leave internal CH4 enabled: it sustains the timer/ADC chain after stop.
     __HAL_TIM_MOE_DISABLE_UNCONDITIONALLY(&htim1);
     if (HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1) != HAL_OK) {
         status = HAL_ERROR;
@@ -106,10 +117,6 @@ int motor_start(void)
         return HAL_ERROR;
     }
     motor_set_ccr(__HAL_TIM_GET_AUTORELOAD(&htim1) / 2U);
-    if (HAL_TIM_GenerateEvent(&htim1, TIM_EVENTSOURCE_UPDATE) != HAL_OK) {
-        return HAL_ERROR;
-    }
-
     if (HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1) != HAL_OK) {
         goto start_failed;
     }

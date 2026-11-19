@@ -33,7 +33,7 @@ Core/Src/acquisition/input_analog.o: \
  ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_tim_ex.h \
  ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart.h \
  ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h \
- ../Core/Inc/adc.h ../Core/Inc/main.h
+ ../Core/Inc/adc.h ../Core/Inc/main.h ../Core/Inc/tim.h
 ../Core/Inc/acquisition/input_analog.h:
 ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal.h:
 ../Core/Inc/stm32g4xx_hal_conf.h:
@@ -69,3 +69,4 @@ Core/Src/acquisition/input_analog.o: \
 ../Drivers/STM32G4xx_HAL_Driver/Inc/stm32g4xx_hal_uart_ex.h:
 ../Core/Inc/adc.h:
 ../Core/Inc/main.h:
+../Core/Inc/tim.h:

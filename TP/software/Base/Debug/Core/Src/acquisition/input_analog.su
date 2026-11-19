@@ -1,3 +1,7 @@
-../Core/Src/acquisition/input_analog.c:21:19:input_analog_init	16	static
-../Core/Src/acquisition/input_analog.c:43:31:input_analog_convert	96	static
-../Core/Src/acquisition/input_analog.c:59:19:input_analog_read	64	static
+../Core/Src/acquisition/input_analog.c:35:19:input_analog_init	16	static
+../Core/Src/acquisition/input_analog.c:89:13:input_analog_publish	24	static
+../Core/Src/acquisition/input_analog.c:120:6:HAL_ADC_ConvHalfCpltCallback	16	static
+../Core/Src/acquisition/input_analog.c:127:6:HAL_ADC_ConvCpltCallback	16	static
+../Core/Src/acquisition/input_analog.c:134:6:HAL_ADC_ErrorCallback	16	static
+../Core/Src/acquisition/input_analog.c:142:31:input_analog_convert	96	static
+../Core/Src/acquisition/input_analog.c:158:19:input_analog_read	72	static,ignoring_inline_asm

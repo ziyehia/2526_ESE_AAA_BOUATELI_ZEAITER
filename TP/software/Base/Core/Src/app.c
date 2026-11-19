@@ -7,6 +7,7 @@
 
 #include "app.h"
 #include "acquisition/input_analog.h"
+#include "acquisition/input_encoder.h"
 #include "user_interface/shell.h"
 
 #define SHELL_RX_QUEUE_SIZE 128U
@@ -66,9 +67,12 @@ static int current_command(h_shell_t* h_shell, int argc, char** argv)
     input_analog_measurement_t measurement;
     const HAL_StatusTypeDef status = input_analog_read(&measurement);
     if (status != HAL_OK) {
-        if (status == HAL_TIMEOUT) {
-            h_shell->drv.transmit("Error: ADC1 measurement timed out.\r\n",
-                sizeof("Error: ADC1 measurement timed out.\r\n") - 1U);
+        if (status == HAL_BUSY) {
+            h_shell->drv.transmit("Error: ADC1 first measurement not ready.\r\n",
+                sizeof("Error: ADC1 first measurement not ready.\r\n") - 1U);
+        } else if (status == HAL_TIMEOUT) {
+            h_shell->drv.transmit("Error: ADC1 measurement is stale.\r\n",
+                sizeof("Error: ADC1 measurement is stale.\r\n") - 1U);
         } else {
             h_shell->drv.transmit("Error: ADC1 measurement failed.\r\n",
                 sizeof("Error: ADC1 measurement failed.\r\n") - 1U);
@@ -77,6 +81,53 @@ static int current_command(h_shell_t* h_shell, int argc, char** argv)
     }
     current_print_channel(h_shell, "Bus", &measurement.bus);
     current_print_channel(h_shell, "U", &measurement.motor);
+    return HAL_OK;
+}
+
+/* Display measured speed; the existing speed command remains a PWM target. */
+static int velocity_command(h_shell_t* h_shell, int argc, char** argv)
+{
+    (void)argv;
+    if (argc != 1) {
+        h_shell->drv.transmit("Error: usage: velocity\r\n",
+                              sizeof("Error: usage: velocity\r\n") - 1U);
+        return HAL_ERROR;
+    }
+    input_encoder_measurement_t measurement;
+    const HAL_StatusTypeDef status = input_encoder_read(&measurement);
+    if (status != HAL_OK) {
+        if (status == HAL_BUSY) {
+            h_shell->drv.transmit("Error: first velocity measurement not ready.\r\n",
+                sizeof("Error: first velocity measurement not ready.\r\n") - 1U);
+        } else if (status == HAL_TIMEOUT) {
+            h_shell->drv.transmit("Error: velocity sampling delayed or stale.\r\n",
+                sizeof("Error: velocity sampling delayed or stale.\r\n") - 1U);
+        } else {
+            h_shell->drv.transmit("Error: encoder measurement failed or counter wrapped.\r\n",
+                sizeof("Error: encoder measurement failed or counter wrapped.\r\n") - 1U);
+        }
+        return status;
+    }
+
+    int size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE,
+        "Encoder: CNT=%u dC=%ld /%u ms\r\n", (unsigned int)measurement.counter,
+        (long)measurement.delta_counts, (unsigned int)INPUT_ENCODER_SAMPLE_PERIOD_MS);
+    if (size > 0) {
+        const uint16_t length = (size < SHELL_PRINT_BUFFER_SIZE)
+            ? (uint16_t)size : SHELL_PRINT_BUFFER_SIZE - 1U;
+        h_shell->drv.transmit(h_shell->print_buffer, length);
+    }
+    const int32_t magnitude = (measurement.speed_mrpm < 0)
+        ? -measurement.speed_mrpm : measurement.speed_mrpm;
+    size = snprintf(h_shell->print_buffer, SHELL_PRINT_BUFFER_SIZE,
+        "Velocity: %s%ld.%03ld rpm\r\n",
+        (measurement.speed_mrpm < 0) ? "-" : "",
+        (long)(magnitude / 1000), (long)(magnitude % 1000));
+    if (size > 0) {
+        const uint16_t length = (size < SHELL_PRINT_BUFFER_SIZE)
+            ? (uint16_t)size : SHELL_PRINT_BUFFER_SIZE - 1U;
+        h_shell->drv.transmit(h_shell->print_buffer, length);
+    }
     return HAL_OK;
 }
 
@@ -97,7 +148,11 @@ void init_device(void)
     if (shell_add(&hshell1, "speed", motor_speed_command, "Ramp CCR to target in 3 s") != 0) {
         Error_Handler();
     }
-    if (shell_add(&hshell1, "current", current_command, "Read bus/U current (polling)") != 0) {
+    if (shell_add(&hshell1, "current", current_command, "Read latest bus/U current (PWM-sync DMA)") != 0) {
+        Error_Handler();
+    }
+
+    if (shell_add(&hshell1, "velocity", velocity_command, "Read measured speed (10 ms, 4096 counts/rev)") != 0) {
         Error_Handler();
     }
 
@@ -108,11 +163,14 @@ void init_device(void)
     if (input_analog_init() != HAL_OK) {
         Error_Handler();
     }
+    if (input_encoder_init() != HAL_OK) {
+        Error_Handler();
+    }
     if (HAL_UART_Receive_IT(&huart2, &shell_uart2_received_char, 1) != HAL_OK) {
         Error_Handler();
     }
 
-    // Later lab steps: button, encoder and closed-loop control initialization.
+    // Later lab steps: button and closed-loop control initialization.
 }
 
 uint8_t shell_uart2_transmit(const char *pData, uint16_t size)

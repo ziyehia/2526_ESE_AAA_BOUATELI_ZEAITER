@@ -21,13 +21,18 @@ typedef struct {
     input_analog_current_t motor;  // Rank 2: PA1 / ADC1_IN2 (U_Imes).
 } input_analog_measurement_t;
 
-/* Calibrate ADC1 once with PWM off; does not calibrate the sensor offsets. */
+/* Called once at boot with PWM off, after ADC1/DMA/TIM1 configuration.
+ * Calibrates ADC1, arms circular DMA, then starts internal TIM1_CH4.
+ * One Bus/U sequence per PWM cycle (20 kHz), including with power PWM off.
+ * ADC internal calibration does not calibrate the current sensor offsets.
+ */
 HAL_StatusTypeDef input_analog_init(void);
 
-/* Main context only: bounded polling, 1 ms timeout per rank.
- * Output is updated only after both conversions and ADC shutdown succeed.
- * Voltage/current use nominal 3.3 V ADC reference, 1.65 V sensor zero and
- * 50 mV/A sensitivity; calibrate these for accurate physical measurements.
+/* Main context only; nonblocking snapshot of the latest complete Bus/U pair.
+ * HAL_BUSY: first pair not yet available; HAL_TIMEOUT: pair older than 10 ms;
+ * HAL_ERROR: invalid argument, initialization failure or latched ADC/DMA error.
+ * Output is unchanged on failure. No conversion is started by this call.
+ * Scaling uses nominal 3.3 V ADC reference, 1.65 V zero, and 50 mV/A.
  */
 HAL_StatusTypeDef input_analog_read(input_analog_measurement_t* measurement);
 

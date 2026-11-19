@@ -80,6 +80,8 @@ void Error_Handler(void);
 #define V_PWM_L_GPIO_Port GPIOB
 #define W_PWM_L_Pin GPIO_PIN_15
 #define W_PWM_L_GPIO_Port GPIOB
+#define ENC_Z_Pin GPIO_PIN_8
+#define ENC_Z_GPIO_Port GPIOC
 #define U_PWM_H_Pin GPIO_PIN_8
 #define U_PWM_H_GPIO_Port GPIOA
 #define V_PWM_H_Pin GPIO_PIN_9

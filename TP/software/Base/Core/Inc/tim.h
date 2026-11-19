@@ -35,13 +35,18 @@ extern "C" {
 extern TIM_HandleTypeDef htim1;
 
 extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim2;
 
 /* USER CODE BEGIN Private defines */
+/* Fixed ADC phase with TIM1 ARR=4250, clock=170 MHz. Validate switching
+ * clearance if the PWM command approaches CCR1=3825 or CCR2=3825. */
+#define TIM1_ADC_TRIGGER_CCR 3825U
 
 /* USER CODE END Private defines */
 
 void MX_TIM1_Init(void);
 void MX_TIM3_Init(void);
+void MX_TIM2_Init(void);
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
